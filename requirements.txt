@@ -1,0 +1,10 @@
+groq
+langgraph
+langchain_groq
+sounddevice
+scipy
+gTTS
+streamlit
+streamlit-mic-recorder
+pydantic
+protobuf>=4.21.1
