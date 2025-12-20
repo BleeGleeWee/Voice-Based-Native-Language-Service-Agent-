@@ -19,14 +19,14 @@ if "last_played_idx" not in st.session_state:
 if "app_started" not in st.session_state:
     st.session_state.app_started = False
 
-# Define Greeting Text
+# Define Greeting Text (Strictly from Requirement 0)
 greeting_text = "नमस्ते! मैं आपका सरकारी योजना सहायक हूँ। बताइए मैं आपकी कैसे मदद कर सकता हूँ?"
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [{"role": "assistant", "text": greeting_text}]
 
 if "thread_id" not in st.session_state:
-    # This creates a completely new ID every time the page is refreshed
+    # Unique ID per session to maintain independent memory
     st.session_state.thread_id = f"session_{str(uuid.uuid4())}"
 
 # --- 2. DYNAMIC UI CONFIGURATION ---
@@ -127,10 +127,10 @@ async def edge_tts_generate(text, filename):
     await communicate.save(filename)
 
 def text_to_speech_b64(text):
-    clean_text = re.sub(r'<.*?>', '', text)       
+    clean_text = re.sub(r'<.*?>', '', text)        
     clean_text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', clean_text)
-    clean_text = clean_text.replace("*", "")      
-    clean_text = clean_text.replace("#", "")      
+    clean_text = clean_text.replace("*", "")       
+    clean_text = clean_text.replace("#", "")       
     clean_text = clean_text.strip()
     
     temp_file = "temp_audio.mp3"
@@ -222,7 +222,10 @@ else:
             try:
                 user_text = transcribe_audio(audio_input['bytes'], st.secrets["GROQ_API_KEY"])
                 
-                if not user_text.strip() or "Error" in user_text: user_text = "..." 
+                # Treat empty transcription or error as "..." to trigger null handler in state
+                if not user_text.strip() or "Error" in user_text: 
+                    user_text = "..." 
+                
                 st.session_state.chat_history.append({"role": "user", "text": user_text})
 
                 config = {"configurable": {"thread_id": st.session_state.thread_id}, "recursion_limit": 10}
