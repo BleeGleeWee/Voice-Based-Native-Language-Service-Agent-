@@ -9,8 +9,8 @@ from langchain_core.messages import SystemMessage
 
 # --- 1. CONFIG & SETUP ---
 llm = ChatGroq(
-    model="llama-3.3-70b-versatile", 
-    groq_api_key=st.secrets["GROQ_API_KEY"], 
+    model="llama-3.3-70b-versatile",
+    groq_api_key=st.secrets["GROQ_API_KEY"],
     temperature=0
 )
 
@@ -23,7 +23,7 @@ class AgentState(TypedDict):
     stage: str               # "intro", "collecting_info", "schemes_presented", "scheme_detail"
     current_intent: str      # intent detected by LLM
 
-# --- 3. TOOLS (Now with 2 Explicit Tools) ---
+# --- 3. TOOLS ---
 
 def search_schemes_tool():
     """Tool 1: Eligibility Engine - Scans database for matching schemes."""
@@ -35,7 +35,6 @@ def search_schemes_tool():
 
 def get_application_link_tool(scheme_data: dict):
     """Tool 2: Retrieval System - Fetches the application URL and details."""
-    # In a real scenario, this might hit an external API or government portal
     return scheme_data.get('link', '#')
 
 # --- 4. NODES ---
@@ -52,23 +51,23 @@ def analyzer_node(state: AgentState):
     # 2. Context Data
     current_stage = state.get("stage", "intro")
     user_info = state.get("user_info", {})
-    # Get simple list of names for the LLM to choose from
     eligible_schemes_list = [s['name_hi'] for s in state.get("eligible_schemes", [])]
 
     # --- RULE LAYER 1: Hallucination Check ---
     if not text_lower or "कर दो" in text_lower:
-         return {"current_intent": "null_input"}
+        return {"current_intent": "null_input"}
 
-    # --- RULE LAYER 2: Hardcoded Keywords (Fast Checks) ---
-    # Only apply basic greeting checks if NOT in scheme selection mode to avoid confusion
-    if current_stage != "schemes_presented":
-        greeting_keywords = ["नमस्ते", "namaste", "hello", "hi", "hey", "pranam"]
-        if any(word in text_lower for word in greeting_keywords):
-            return {"current_intent": "greeting"}
+    # --- RULE LAYER 2: Hardcoded Keywords (GLOBAL INTERRUPTS) ---
+    # FIX: We allow greetings/reset checks at ANY stage now.
+    
+    greeting_keywords = ["नमस्ते", "namaste", "hello", "hi", "hey", "pranam"]
+    if any(word in text_lower for word in greeting_keywords):
+        return {"current_intent": "greeting"}
 
-        start_keywords = ["शुरू", "start", "kya bolna", "kya karna", "kaise", "मदद", "help"]
-        if any(word in text_lower for word in start_keywords) and "age" not in text_lower and "income" not in text_lower:
-            return {"current_intent": "query_start"}
+    start_keywords = ["शुरू", "start", "kya bolna", "kya karna", "kaise", "मदद", "help", "reset"]
+    # We check if they are NOT trying to give data (age/income)
+    if any(word in text_lower for word in start_keywords) and "age" not in text_lower and "income" not in text_lower:
+        return {"current_intent": "query_start"}
 
     # Explicit Denials
     deny_keywords = ["nahi", "no", "rehne do", "nhi", "na"]
@@ -117,17 +116,15 @@ def analyzer_node(state: AgentState):
         updates["user_info"] = new_info
 
         # Handle Fuzzy Matched Scheme
-        # The LLM now gives us the EXACT name from our list, so we can find it easily
         if data.get("matched_scheme_name"):
             found = next((s for s in state.get("eligible_schemes", []) if s['name_hi'] == data["matched_scheme_name"]), None)
             if found:
                 updates["selected_scheme"] = found
-                # If LLM found a match, force intent to 'select_scheme' to be safe
                 updates["current_intent"] = "select_scheme"
 
         return updates
 
-    except Exception as e:
+    except Exception:
         # Fallback for numbers
         import re
         numbers = re.findall(r'\d+', last_message)
@@ -149,23 +146,35 @@ def decision_node(state: AgentState):
     response_text = ""
     next_stage = stage 
 
+    # --- GLOBAL HANDLERS (Priority 1) ---
+    # If user says Hello or Restart, we RESET everything regardless of current stage.
+    if intent == "greeting":
+        return {
+            "messages": ["नमस्ते, आशा करता हूँ आपका दिन अच्छा जा रहा है |"],
+            "stage": "intro", # Force reset
+            "user_info": {},  # Optional: clear data on greeting if you want strict reset
+            "eligible_schemes": []
+        }
+    
+    if intent == "query_start":
+        return {
+            "messages": ["आप पर लागू सरकारी योजनाओं के बारे में अधिक जानने के लिए, कृपया मुझे अपनी उम्र और आय बताएं।"],
+            "stage": "collecting_info"
+        }
+
     # --- CASE 0: Null Input ---
     if intent == "null_input":
         return {"messages": ["माफ़ करें, मैं आपको समझ नहीं पाया। क्या आप कृपया फिर से दोहरा सकते हैं?"]}
 
     # --- LAYER 1: Intro ---
     if stage == "intro":
-        if intent == "greeting":
-            response_text = "नमस्ते, आशा करता हूँ आपका दिन अच्छा जा रहा है |"
-        elif intent == "query_start":
-            response_text = "आप पर लागू सरकारी योजनाओं के बारे में अधिक जानने के लिए, कृपया मुझे अपनी उम्र और आय बताएं।"
-            next_stage = "collecting_info"
-        elif intent == "provide_info":
+        if intent == "provide_info":
              pass # Pass to Layer 2 logic
         else:
             response_text = "क्षमा करें, मैं केवल सरकारी योजनाओं में आपकी सहायता कर सकता हूँ।"
 
     # --- LAYER 2: Collecting Info ---
+    # We enter here if stage is collecting_info OR if user provided info in intro stage
     if intent == "provide_info" or (stage == "collecting_info" and intent not in ["greeting", "irrelevant"]):
         if not age or not income:
             response_text = "सही योजना खोजने के लिए मुझे आपकी उम्र और आय दोनों की आवश्यकता होगी |"
@@ -176,10 +185,9 @@ def decision_node(state: AgentState):
             eligible = [s for s in schemes if int(age) >= s['min_age'] and int(income) <= s['max_income']]
             
             if eligible:
-                names = ", ".join([f"{i+1}. {s['name_hi']}" for i, s in enumerate(eligible)])
+                names = "\n".join([f"{i+1}. {s['name_hi']}" for i, s in enumerate(eligible)])
                 response_text = f"आपकी जानकारी के आधार पर, आप निम्नलिखित योजनाओं के लिए पात्र हैं:\n{names}"
                 next_stage = "schemes_presented"
-                # Important: Update state with eligible schemes immediately
                 return {"messages": [response_text], "eligible_schemes": eligible, "stage": next_stage}
             else:
                 response_text = "क्षमा करें, आपकी आयु और आय के आधार पर अभी कोई योजना उपलब्ध नहीं है।"
@@ -202,14 +210,11 @@ def decision_node(state: AgentState):
                 response_text = f"{scheme['name_hi']}: {scheme['description']}\n\nक्या आप आवेदन करना चाहते हैं?"
                 next_stage = "scheme_detail"
             else:
-                # If LLM intent was select_scheme but mapping failed
                 response_text = "कृपया उस योजना का नाम स्पष्ट रूप से बताएं जो सूची में है।"
 
-        # Specific response for irrelevant input at this stage
         elif intent == "irrelevant":
              response_text = "कृपया चुनें और बताएं कि आप किस योजना के लिए आवेदन करना चाहेंगे?"
         
-        # Catch-all for other deviations
         else:
              response_text = "कृपया चुनें और बताएं कि आप किस योजना के लिए आवेदन करना चाहेंगे?"
 
@@ -218,9 +223,7 @@ def decision_node(state: AgentState):
         scheme = state.get("selected_scheme")
         
         if intent == "confirm_apply":
-            # TOOL 2 USAGE: Get Link
             link = get_application_link_tool(scheme)
-            
             response_text = f"बढ़िया! आप इस लिंक पर जाकर आवेदन कर सकते हैं: [यहाँ क्लिक करें]({link})"
             next_stage = "intro" 
         
