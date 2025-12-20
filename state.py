@@ -181,6 +181,7 @@ def decision_node(state: AgentState):
             next_stage = "collecting_info"
 
         # 1.3.a Partial Info Check
+        # IMPORTANT: We check this BEFORE checking age > 100
         elif not age or not income:
              if intent != "greeting": # Don't scold if they just said Hi
                 response_text = "सही योजना खोजने के लिए मुझे आपकी उम्र और आय दोनों की आवश्यकता होगी |"
@@ -194,10 +195,11 @@ def decision_node(state: AgentState):
             except:
                 age_int = 0; income_int = 0
 
-            # Rule: Age > 100
+            # Rule: Age > 100 (STRICT CHECK)
             if age_int > 100:
                 response_text = "मनुष्य का औसत जीवनकाल 90 साल होता है, कृपया मुझे अपनी सही उम्र बताएं"
-                # Reset age to force re-entry, keep stage
+                # CRITICAL: We DO NOT reset stage. We keep asking.
+                # We optionally clear the invalid age so they MUST enter it again
                 state["user_info"]["age"] = None 
                 next_stage = "collecting_info"
             
@@ -239,10 +241,8 @@ def decision_node(state: AgentState):
         # 1.3.c.3 Deviation (Random topic after list)
         elif intent == "irrelevant" or intent == "greeting":
             response_text = "माफ़ कीजिए, मुझे बिल्कुल भी पता नहीं कि आप क्या कह रहे हैं |"
-            # Note: You asked for this reply, but usually we'd want to nudge them back. 
-            # I will adhere to your script.
         
-        # 1.3.c.1.i Deviation Loop (Catch-all if they don't pick a scheme)
+        # 1.3.c.1.i Deviation Loop (Catch-all)
         else:
              response_text = "कृपया चुनें और बताएं कि आप किस योजना के लिए आवेदन करना चाहेंगे?"
 
