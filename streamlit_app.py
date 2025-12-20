@@ -2,12 +2,11 @@ import streamlit as st
 from streamlit_mic_recorder import mic_recorder
 from groq import Groq
 from state import app
-import io
 import base64
 import edge_tts
 import asyncio
 import re
-import uuid  
+import uuid   
 from stt import transcribe_audio
 
 # --- 1. SETUP & SESSION STATE ---
@@ -26,7 +25,6 @@ greeting_text = "नमस्ते! मैं आपका सरकारी �
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [{"role": "assistant", "text": greeting_text}]
 
-
 if "thread_id" not in st.session_state:
     # This creates a completely new ID every time the page is refreshed
     st.session_state.thread_id = f"session_{str(uuid.uuid4())}"
@@ -34,10 +32,7 @@ if "thread_id" not in st.session_state:
 # --- 2. DYNAMIC UI CONFIGURATION ---
 st.set_page_config(page_title="सरकारी योजना सहायक", layout="centered")
 
-# We switch CSS based on whether the app has started or not
 if not st.session_state.app_started:
-    # --- START SCREEN CSS (Darker BG, Black Button) ---
-    # brightness(0.3) makes it dark enough for white text to pop
     bg_filter = "brightness(0.3)" 
     
     button_style = """
@@ -59,7 +54,6 @@ if not st.session_state.app_started:
     }
     """
 else:
-    # --- MAIN APP CSS (Blurred BG, White/Small Buttons for Replay) ---
     bg_filter = "blur(8px) brightness(0.4)" 
     button_style = """
     .stButton>button { 
@@ -89,7 +83,6 @@ st.markdown(f"""
     .chat-container {{ display: flex; flex-direction: column; gap: 10px; padding: 10px; }}
     .bubble {{ padding: 15px; border-radius: 15px; max-width: 85%; color: white; margin-bottom: 5px; font-size: 16px; }}
     
-    /* Transparent Red Assistant Bubble */
     .assistant {{ 
         background: rgba(220, 20, 60, 0.25); 
         align-self: flex-start; 
@@ -103,7 +96,6 @@ st.markdown(f"""
     /* Inject Dynamic Button Styles */
     {button_style}
     
-    /* Start Screen Layout */
     .start-container {{ 
         display: flex; 
         flex-direction: column;
@@ -112,18 +104,12 @@ st.markdown(f"""
     }}
     
     .spacer {{
-        height: 30vh; /* This forces the scroll gap */
+        height: 30vh; 
     }}
     
     h1 {{ text-shadow: 2px 2px 8px #000000; }}
     </style>
 """, unsafe_allow_html=True)
-
-# Initialize Groq Client
-try:
-    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-except:
-    st.error("Please set GROQ_API_KEY in secrets.")
 
 # --- 3. HELPER FUNCTIONS ---
 
@@ -136,42 +122,30 @@ def format_message(text):
     text = text.replace('\n', '<br>')
     return text
 
-# --- EDGE TTS LOGIC (Male Voice: Madhur) ---
-
 async def edge_tts_generate(text, filename):
-    """Async function to fetch audio from Microsoft Edge TTS"""
-    # "hi-IN-MadhurNeural" is the high-quality Male Hindi Voice
     communicate = edge_tts.Communicate(text, "hi-IN-MadhurNeural")
     await communicate.save(filename)
 
 def text_to_speech_b64(text):
-    """Convert text to Hindi Audio (Male Voice) using Edge TTS"""
-    # 1. Clean the text (Remove HTML, Links, Bold, Headings)
-    clean_text = re.sub(r'<.*?>', '', text)       # Remove HTML tags
-    clean_text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', clean_text) # Keep text of links, remove URL
-    clean_text = clean_text.replace("*", "")      # Remove bold syntax
-    clean_text = clean_text.replace("#", "")      # Remove markdown headings
+    clean_text = re.sub(r'<.*?>', '', text)       
+    clean_text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', clean_text)
+    clean_text = clean_text.replace("*", "")      
+    clean_text = clean_text.replace("#", "")      
     clean_text = clean_text.strip()
     
-    # 2. Define a temporary filename
-    # We use a static name because we overwrite it every time anyway
     temp_file = "temp_audio.mp3"
     
     try:
-        # 3. Run the Async function in a synchronous way for Streamlit
-        # We must create a new event loop to avoid thread conflicts
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(edge_tts_generate(clean_text, temp_file))
         
-        # 4. Read the file bytes and convert to Base64
         with open(temp_file, "rb") as f:
             audio_bytes = f.read()
             
         return base64.b64encode(audio_bytes).decode()
         
-    except Exception as e:
-        # If Edge TTS fails (network issue), return empty string so app doesn't crash
+    except Exception:
         return ""
 
 # --- 4. MAIN LOGIC ---
@@ -179,15 +153,9 @@ def text_to_speech_b64(text):
 # A. START SCREEN
 if not st.session_state.app_started:
     st.markdown("<div class='start-container'>", unsafe_allow_html=True)
-    
-    # 1. Title at the Top
     st.markdown("<h1 style='text-align: center; color: white; font-size: 3.5rem; margin-top: 50px;'>सरकारी योजना सहायक 🏛️</h1>", unsafe_allow_html=True)
-    
-    # 2. Huge Spacer to force scroll
     st.markdown("<div class='spacer'></div>", unsafe_allow_html=True)
-    
-    # 3. Button at the bottom
-    st.write("") # Small gap
+    st.write("") 
     if st.button("सहायक शुरू करें"):
         st.session_state.app_started = True
         st.rerun()
@@ -252,10 +220,8 @@ else:
         st.session_state.is_processing = True
         with st.spinner("पहचाना जा रहा है..."):
             try:
-                user_text = transcribe_audio(
-    audio_input['bytes'], 
-    st.secrets["GROQ_API_KEY"]
-)
+                user_text = transcribe_audio(audio_input['bytes'], st.secrets["GROQ_API_KEY"])
+                
                 if not user_text.strip() or "Error" in user_text: user_text = "..." 
                 st.session_state.chat_history.append({"role": "user", "text": user_text})
 
