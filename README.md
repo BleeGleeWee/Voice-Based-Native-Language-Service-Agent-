@@ -1,5 +1,9 @@
 # Sarkari Yojana Sahayak 🏛️ (Voice-Based Native Language Agent)
 
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://native-lang-agent-ml.streamlit.app/)
+**[🔴 Live Demo: Click Here to Try the Agent](https://native-lang-agent-ml.streamlit.app/)**
+
+**Sarkari Yojana Sahayak** is a voice-first, agentic AI system designed to assist rural users in discovering and applying for government welfare schemes in their native language (Hindi). Unlike simple chatbots, this system uses a **Finite State Machine (FSM)** via LangGraph to guide the user through a structured conversation flow—from eligibility checks to final application—while handling errors, interruptions, and memory context.
 **Sarkari Yojana Sahayak** is a voice-first, agentic AI system designed to assist rural users in discovering and applying for government welfare schemes in their native language (Hindi). Unlike simple chatbots, this system uses a **Finite State Machine (FSM)** via LangGraph to guide the user through a structured conversation flow—from eligibility checks to final application—while handling errors, interruptions, and memory context.
 
 ## 🚀 Key Features
@@ -76,8 +80,8 @@ The agent follows a strict **Depth-Layered Conversation Flow**. This ensures use
 ### 1. Clone the Repository
 
 ```bash
-git clone [https://github.com/YourUsername/Your-Repo-Name.git](https://github.com/YourUsername/Your-Repo-Name.git)
-cd Your-Repo-Name
+git clone https://github.com/BleeGleeWee/Voice-Based-Native-Language-Service-Agent-
+cd Voice-Based-Native-Language-Service-Agent-
 
 ```
 
