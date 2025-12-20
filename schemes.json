@@ -5,7 +5,8 @@
         "description": "निराश्रित बुजुर्गों, विधवाओं और विकलांग व्यक्तियों को मासिक वित्तीय सहायता प्रदान की जाती है।",
         "keywords": ["senior", "बुजुर्ग", "निराधार", "वृद्ध", "विधवा", "विकलांग"],
         "min_age": 60,
-        "max_income": 21000
+        "max_income": 21000,
+        "link": "https://sjsa.maharashtra.gov.in/"
     },
     {
         "id": "pm_skill",
@@ -13,7 +14,8 @@
         "description": "युवाओं के लिए मुफ्त कौशल प्रशिक्षण और रोजगार के अवसर प्रदान करने वाली योजना।",
         "keywords": ["शिक्षा", "कौशल", "नौकरी", "युवा", "ट्रेनिंग"],
         "min_age": 18,
-        "max_income": 100000
+        "max_income": 100000,
+        "link": "https://kaushalya.maharashtra.gov.in/"
     },
     {
         "id": "pm_kisan",
@@ -21,7 +23,8 @@
         "description": "छोटे और सीमांत किसानों को प्रति वर्ष 6000 रुपये की सीधी वित्तीय सहायता।",
         "keywords": ["किसान", "खेती", "कृषि", "ग्रामीण"],
         "min_age": 18,
-        "max_income": 200000
+        "max_income": 200000,
+        "link": "https://pmkisan.gov.in/"
     },
     {
         "id": "pms_sc_st",
@@ -29,7 +32,8 @@
         "description": "अनुसूचित जाति और जनजाति के छात्रों को उच्च शिक्षा के लिए वित्तीय सहायता और शुल्क प्रतिपूर्ति।",
         "keywords": ["शिक्षा", "छात्रवृत्ति", "SC", "ST", "कॉलेज", "पिछड़ी जाति"],
         "min_age": 17,
-        "max_income": 250000
+        "max_income": 250000,
+        "link": "https://scholarships.gov.in/"
     },
     {
         "id": "nai_roshni",
@@ -37,7 +41,8 @@
         "description": "अल्पसंख्यक महिलाओं के लिए नेतृत्व विकास कार्यक्रम ताकि वे सरकारी प्रणालियों का उपयोग कर सकें।",
         "keywords": ["महिला", "नेतृत्व", "अल्पसंख्यक", "मुस्लिम", "सिख", "ईसाई"],
         "min_age": 18,
-        "max_income": 250000
+        "max_income": 250000,
+        "link": "http://nairoshni-moma.gov.in/"
     },
     {
         "id": "mgnrega_rural",
@@ -45,7 +50,8 @@
         "description": "ग्रामीण परिवारों को एक वित्तीय वर्ष में कम से कम 100 दिनों के अकुशल मजदूरी रोजगार की गारंटी।",
         "keywords": ["रोजगार", "मजदूरी", "ग्रामीण", "गाँव", "काम"],
         "min_age": 18,
-        "max_income": 999999
+        "max_income": 999999,
+        "link": "https://nrega.nic.in/"
     },
     {
         "id": "pre_matric_minority",
@@ -53,7 +59,8 @@
         "description": "अल्पसंख्यक समुदायों के कक्षा 1 से 10 तक के छात्रों के लिए स्कूल की पढ़ाई जारी रखने हेतु सहायता।",
         "keywords": ["स्कूल", "बच्चे", "छात्रवृत्ति", "अल्पसंख्यक", "शिक्षा"],
         "min_age": 6,
-        "max_income": 100000
+        "max_income": 100000,
+        "link": "https://scholarships.gov.in/"
     },
     {
         "id": "stand_up_india",
@@ -61,7 +68,8 @@
         "description": "SC/ST और महिला उद्यमियों को नया व्यवसाय शुरू करने के लिए 10 लाख से 1 करोड़ तक का बैंक ऋण।",
         "keywords": ["व्यापार", "ऋण", "लोन", "SC", "ST", "उद्यमी"],
         "min_age": 18,
-        "max_income": 9999999
+        "max_income": 9999999,
+        "link": "https://www.standupmitra.in/"
     },
     {
         "id": "pmay_gramin",
@@ -69,7 +77,8 @@
         "description": "ग्रामीण क्षेत्रों में बेघर परिवारों को पक्का घर बनाने के लिए वित्तीय सहायता।",
         "keywords": ["घर", "आवास", "ग्रामीण", "गरीब", "पक्का मकान"],
         "min_age": 18,
-        "max_income": 300000
+        "max_income": 300000,
+        "link": "https://pmayg.nic.in/"
     },
     {
         "id": "pm_vishwakarma",
@@ -77,7 +86,8 @@
         "description": "पारंपरिक कारीगरों और शिल्पकारों (जैसे सुथार, लोहार) को कौशल प्रशिक्षण और सस्ता ऋण।",
         "keywords": ["कारीगर", "शिल्पकार", "लोन", "ट्रेनिंग", "ओजार", "OBC"],
         "min_age": 18,
-        "max_income": 999999
+        "max_income": 999999,
+        "link": "https://pmvishwakarma.gov.in/"
     },
     {
         "id": "pm_yasasvi",
@@ -85,7 +95,8 @@
         "description": "OBC, EBC और DNT श्रेणी के मेधावी छात्रों के लिए उच्च स्तरीय शिक्षा छात्रवृत्ति।",
         "keywords": ["OBC", "पिछड़ी जाति", "छात्रवृत्ति", "शिक्षा", "परीक्षा"],
         "min_age": 14,
-        "max_income": 250000
+        "max_income": 250000,
+        "link": "https://socialjustice.gov.in/"
     },
     {
         "id": "pm_ajay",
@@ -93,6 +104,7 @@
         "description": "अनुसूचित जाति (SC) के प्रभुत्व वाले गांवों के सामाजिक-आर्थिक विकास और बुनियादी ढांचे के लिए सहायता।",
         "keywords": ["SC", "विकास", "सामाजिक", "गाँव", "कल्याण"],
         "min_age": 18,
-        "max_income": 250000
+        "max_income": 250000,
+        "link": "https://pmajay.dosje.gov.in/"
     }
 ]

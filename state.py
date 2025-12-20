@@ -6,126 +6,231 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import SystemMessage
 
-# --- 1. स्टेट परिभाषा ---
-class AgentState(TypedDict):
-    messages: Annotated[list, operator.add]
-    user_info: dict  # आयु और आय स्टोर करने के लिए
-    eligible_schemes: List[str]
-    is_complete: bool
-    current_action: str # "info", "apply", "no", "irrelevant", या "execute"
-
-# मॉडल इनिशियलाइजेशन (अपडेटेड मॉडल नाम के साथ)
-GROQ_API_KEY = "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"
+# --- 1. CONFIG & SETUP ---
+GROQ_API_KEY = "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" 
 llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=GROQ_API_KEY, temperature=0)
 
-# --- 2. टूल्स ---
+# --- 2. STATE DEFINITION ---
+class AgentState(TypedDict):
+    messages: Annotated[list, operator.add]
+    user_info: dict          # stores age, income
+    eligible_schemes: List[dict] # stores full scheme objects
+    selected_scheme: dict    # currently discussed scheme
+    stage: str               # "intro", "collecting_info", "schemes_presented", "scheme_detail"
+    current_intent: str      # intent detected by LLM
+
+# --- 3. TOOLS ---
 def search_schemes_tool():
-    """लोकल डेटाबेस से योजनाओं को लोड करने का टूल"""
+    """Load schemes from JSON."""
     try:
         with open("schemes.json", "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return []
 
-# --- 3. नोड्स (तर्क और निर्णय) ---
+# --- 4. NODES ---
 
-def extractor_node(state: AgentState):
-    """AI Extractor: इरादे की पहचान और जानकारी निकालना"""
-    last_message = state["messages"][-1]
+def analyzer_node(state: AgentState):
+    """
+    Core Intelligence: Hybrid approach (Keywords + LLM with Fuzzy Logic).
+    """
+    # 1. Safely extract text
+    last_msg = state["messages"][-1]
+    last_message = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+    text_lower = last_message.lower().strip()
+
+    # 2. Context Data
+    current_stage = state.get("stage", "intro")
     user_info = state.get("user_info", {})
+    # Get simple list of names for the LLM to choose from
+    eligible_schemes_list = [s['name_hi'] for s in state.get("eligible_schemes", [])]
 
+    # --- RULE LAYER 1: Hallucination Check ---
+    if not text_lower or "कर दो" in text_lower:
+         return {"current_intent": "null_input"}
+
+    # --- RULE LAYER 2: Hardcoded Keywords (Fast Checks) ---
+    # Only apply basic greeting checks if NOT in scheme selection mode to avoid confusion
+    if current_stage != "schemes_presented":
+        greeting_keywords = ["नमस्ते", "namaste", "hello", "hi", "hey", "pranam"]
+        if any(word in text_lower for word in greeting_keywords):
+            return {"current_intent": "greeting"}
+
+        start_keywords = ["शुरू", "start", "kya bolna", "kya karna", "kaise", "मदद", "help"]
+        if any(word in text_lower for word in start_keywords) and "age" not in text_lower and "income" not in text_lower:
+            return {"current_intent": "query_start"}
+
+    # Explicit Denials
+    deny_keywords = ["nahi", "no", "rehne do", "nhi", "na"]
+    if text_lower in deny_keywords: 
+        return {"current_intent": "deny_apply"}
+
+    # --- AI LAYER 3: LLM Analysis (Smart Fuzzy Matching) ---
     prompt = f"""
-    आप एक इंटेलिजेंट एजेंट हैं। इस हिंदी इनपुट का विश्लेषण करें: "{last_message}"
+    You are the brain of 'Sarkari Yojana Sahayak'. Analyze the Hindi input.
     
-    1. Intent: क्या उपयोगकर्ता 'जानकारी दे रहा है' (info), 'आवेदन करना चाहता है' (apply), 'मना कर रहा है' (no), या 'असंगत बात' (irrelevant) कर रहा है?
-    2. Data: यदि 'info' है, तो आयु (age) और आय (income) निकालें।
-    3. Contradiction: यदि नई आयु पुरानी आयु ({user_info.get('age')}) से अलग है, तो 'flag_contradiction' को true करें।
+    Current Stage: {current_stage}
+    User Data: Age={user_info.get('age')}, Income={user_info.get('income')}
+    
+    **AVAILABLE SCHEMES LIST**: {eligible_schemes_list}
 
-    केवल JSON वापस करें:
-    {{"intent": "info", "age": 25, "income": 20000, "flag_contradiction": false}}
+    Classify user input into exactly one INTENT:
+    1. 'provide_info' : Contains Age (number) OR Income (number).
+    2. 'ask_all_details' : "Schemes ke baare me batao", "Benefits kya hai".
+    3. 'select_scheme' : User is trying to name a scheme. **FUZZY MATCHING REQUIRED**: If the user says "PM Yashashwag" or "Pre metric", match it to the closest name in the AVAILABLE SCHEMES LIST.
+    4. 'confirm_apply' : "Ha", "Yes", "Apply karna hai", "Aavedan".
+    5. 'deny_apply' : "Nahi", "No".
+    6. 'irrelevant' : Weather, Jokes, Food, Politics (Ice cream, Rain, etc).
+
+    RETURN ONLY RAW JSON:
+    {{
+        "intent": "string",
+        "age": int or null, 
+        "income": int or null,
+        "matched_scheme_name": "string (EXACT name from the AVAILABLE LIST) or null"
+    }}
+    
+    User Input: "{last_message}"
     """
     
     try:
         response = llm.invoke([SystemMessage(content=prompt)])
-        data = json.loads(response.content.strip().replace('```json', '').replace('```', ''))
+        clean_content = response.content.strip().replace('```json', '').replace('```', '')
+        data = json.loads(clean_content)
         
-        # विसंगति संभालना (Contradiction Handling)
-        new_messages = []
-        if data.get("flag_contradiction"):
-            new_messages.append("मैंने नोट किया कि आपकी आयु पहले अलग थी। क्या आप नई जानकारी के साथ आगे बढ़ना चाहते हैं?")
-
-        # डेटा अपडेट करें
-        if data.get("age"): user_info["age"] = data["age"]
-        if data.get("income"): user_info["income"] = data["income"]
+        updates = {"current_intent": data.get("intent", "irrelevant")}
         
-        return {"user_info": user_info, "current_action": data.get("intent", "info"), "messages": new_messages}
-    except:
-        return {"current_action": "irrelevant"}
+        # Update user info
+        new_info = state.get("user_info", {}).copy()
+        if data.get("age"): new_info["age"] = data["age"]
+        if data.get("income"): new_info["income"] = data["income"]
+        updates["user_info"] = new_info
 
-def planner_node(state: AgentState):
-    """Planner: इरादे के आधार पर अगला कदम तय करना"""
-    intent = state.get("current_action")
+        # Handle Fuzzy Matched Scheme
+        # The LLM now gives us the EXACT name from our list, so we can find it easily
+        if data.get("matched_scheme_name"):
+            found = next((s for s in state.get("eligible_schemes", []) if s['name_hi'] == data["matched_scheme_name"]), None)
+            if found:
+                updates["selected_scheme"] = found
+                # If LLM found a match, force intent to 'select_scheme' to be safe
+                updates["current_intent"] = "select_scheme"
+
+        return updates
+
+    except Exception as e:
+        # Fallback for numbers
+        import re
+        numbers = re.findall(r'\d+', last_message)
+        if len(numbers) >= 1:
+             return {"current_intent": "provide_info"}
+        return {"current_intent": "irrelevant"}
+
+
+def decision_node(state: AgentState):
+    """
+    The Rule Engine: Maps Intents + Stage to specific responses.
+    """
+    intent = state.get("current_intent")
+    stage = state.get("stage", "intro")
     user_info = state.get("user_info", {})
-
-    # Failure Handling: असंबंधित इनपुट (जैसे आइसक्रीम)
-    if intent == "irrelevant":
-        return {"messages": ["क्षमा करें, मैं केवल सरकारी योजनाओं में आपकी सहायता कर सकता हूँ। कृपया अपनी आयु या आय बताएं।"], "is_complete": False}
-
-    # Incomplete Info: यदि जानकारी गायब है
-    if not user_info.get("age") or not user_info.get("income"):
-        return {"messages": ["पात्रता जानने के लिए मुझे आपकी आयु और आय दोनों की आवश्यकता है।"], "is_complete": False}
-
-    # Application Intent: यदि उपयोगकर्ता आवेदन करना चाहता है
-    if intent == "apply":
-        return {"messages": ["बहुत अच्छा! आवेदन के लिए आपको आधार कार्ड की आवश्यकता होगी। क्या मैं प्रक्रिया शुरू करूँ?"], "is_complete": True}
-
-    return {"current_action": "execute"}
-
-def executor_node(state: AgentState):
-    """Executor: पात्रता इंजन (यही फंक्शन मिसिंग था)"""
-    user_info = state.get("user_info", {})
-    age = int(user_info.get("age", 0))
-    income = int(user_info.get("income", 0))
-
-    schemes = search_schemes_tool()
-    valid_schemes = []
-
-    for s in schemes:
-        if age >= s['min_age'] and income <= s['max_income']:
-            valid_schemes.append(s['name_hi'])
-            
-    return {"eligible_schemes": valid_schemes}
-
-def evaluator_node(state: AgentState):
-    """Evaluator: अंतिम परिणाम और फीडबैक"""
-    schemes = state.get("eligible_schemes", [])
-    if not schemes:
-        msg = "क्षमा करें, आपकी जानकारी के आधार पर कोई योजना नहीं मिली।"
-    else:
-        msg = f"आप इन योजनाओं के लिए पात्र हैं: {', '.join(schemes)}। क्या आप आवेदन करना चाहते हैं?"
+    age = user_info.get("age")
+    income = user_info.get("income")
     
-    return {"messages": [msg], "is_complete": True}
+    response_text = ""
+    next_stage = stage 
 
-# --- 4. ग्राफ़ निर्माण ---
+    # --- CASE 0: Null Input ---
+    if intent == "null_input":
+        return {"messages": ["माफ़ करें, मैं आपको समझ नहीं पाया। क्या आप कृपया फिर से दोहरा सकते हैं?"]}
+
+    # --- LAYER 1: Intro ---
+    if stage == "intro":
+        if intent == "greeting":
+            response_text = "नमस्ते, आशा करता हूँ आपका दिन अच्छा जा रहा है |"
+        elif intent == "query_start":
+            response_text = "आप पर लागू सरकारी योजनाओं के बारे में अधिक जानने के लिए, कृपया मुझे अपनी उम्र और आय बताएं।"
+            next_stage = "collecting_info"
+        elif intent == "provide_info":
+             pass # Pass to Layer 2 logic
+        else:
+            response_text = "क्षमा करें, मैं केवल सरकारी योजनाओं में आपकी सहायता कर सकता हूँ।"
+
+    # --- LAYER 2: Collecting Info ---
+    if intent == "provide_info" or (stage == "collecting_info" and intent not in ["greeting", "irrelevant"]):
+        if not age or not income:
+            response_text = "सही योजना खोजने के लिए मुझे आपकी उम्र और आय दोनों की आवश्यकता होगी |"
+            next_stage = "collecting_info"
+        else:
+            schemes = search_schemes_tool()
+            eligible = [s for s in schemes if int(age) >= s['min_age'] and int(income) <= s['max_income']]
+            
+            if eligible:
+                names = ", ".join([f"{i+1}. {s['name_hi']}" for i, s in enumerate(eligible)])
+                response_text = f"आपकी जानकारी के आधार पर, आप निम्नलिखित योजनाओं के लिए पात्र हैं:\n{names}"
+                next_stage = "schemes_presented"
+                # Important: Update state with eligible schemes immediately
+                return {"messages": [response_text], "eligible_schemes": eligible, "stage": next_stage}
+            else:
+                response_text = "क्षमा करें, आपकी आयु और आय के आधार पर अभी कोई योजना उपलब्ध नहीं है।"
+                next_stage = "intro" 
+
+    elif stage == "collecting_info" and intent == "irrelevant":
+         response_text = "कृपया एक मान्य उत्तर दर्ज करें | पात्रता जानने के लिए मुझे आपकी आयु और आय दोनों की आवश्यकता है।"
+
+    # --- LAYER 3: Schemes Presented (The Fix is Here) ---
+    elif stage == "schemes_presented":
+        
+        if intent == "ask_all_details":
+            eligible = state.get("eligible_schemes", [])
+            details = "\n\n".join([f"**{s['name_hi']}**: {s['description']}" for s in eligible])
+            response_text = f"यहाँ योजनाओं का विवरण दिया गया है:\n{details}\n\nबताएं कि आप किस योजना के लिए आवेदन करना चाहेंगे?"
+        
+        elif intent == "select_scheme":
+            scheme = state.get("selected_scheme")
+            if scheme:
+                response_text = f"{scheme['name_hi']}: {scheme['description']}\n\nक्या आप आवेदन करना चाहते हैं?"
+                next_stage = "scheme_detail"
+            else:
+                # If LLM intent was select_scheme but mapping failed
+                response_text = "कृपया उस योजना का नाम स्पष्ट रूप से बताएं जो सूची में है।"
+
+        # FIX: Specific response for irrelevant input at this stage
+        elif intent == "irrelevant":
+             response_text = "कृपया चुनें और बताएं कि आप किस योजना के लिए आवेदन करना चाहेंगे?"
+        
+        # Catch-all for other deviations
+        else:
+             response_text = "कृपया चुनें और बताएं कि आप किस योजना के लिए आवेदन करना चाहेंगे?"
+
+    # --- LAYER 4: Scheme Detail ---
+    elif stage == "scheme_detail":
+        scheme = state.get("selected_scheme")
+        
+        if intent == "confirm_apply":
+            link = scheme.get('link', '#')
+            response_text = f"बढ़िया! आप इस लिंक पर जाकर आवेदन कर सकते हैं: [यहाँ क्लिक करें]({link})"
+            next_stage = "intro" 
+        
+        elif intent == "deny_apply":
+            response_text = "धन्यवाद, आपसे मिलकर खुशी हुई, आशा करता हूँ कि भविष्य में मैं आपके काम आ सकूँ।"
+            next_stage = "intro"
+        
+        else:
+            response_text = "कृपया 'हाँ' या 'नहीं' में उत्तर दें। क्या आप आवेदन करना चाहते हैं?"
+
+    # Fallback
+    if not response_text:
+        response_text = "माफ़ करें, मैं समझ नहीं पाया।"
+
+    return {"messages": [response_text], "stage": next_stage}
+
+# --- 5. GRAPH CONSTRUCTION ---
 workflow = StateGraph(AgentState)
-
-workflow.add_node("extractor", extractor_node)
-workflow.add_node("planner", planner_node)
-workflow.add_node("executor", executor_node)
-workflow.add_node("evaluator", evaluator_node)
-
-workflow.add_edge(START, "extractor")
-workflow.add_edge("extractor", "planner")
-
-# कंडीशनल एज: प्लानर तय करेगा कि एक्जीक्यूटर पर जाना है या रुकना है
-workflow.add_conditional_edges(
-    "planner",
-    lambda x: "executor" if x["current_action"] == "execute" else "end",
-    {"executor": "executor", "end": END}
-)
-
-workflow.add_edge("executor", "evaluator")
-workflow.add_edge("evaluator", END)
+workflow.add_node("analyzer", analyzer_node)
+workflow.add_node("decision_maker", decision_node)
+workflow.add_edge(START, "analyzer")
+workflow.add_edge("analyzer", "decision_maker")
+workflow.add_edge("decision_maker", END)
 
 memory = MemorySaver()
 app = workflow.compile(checkpointer=memory)
