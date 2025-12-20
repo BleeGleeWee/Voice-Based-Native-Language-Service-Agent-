@@ -137,131 +137,204 @@ def analyzer_node(state: AgentState):
 
 
 def decision_node(state: AgentState):
+
     """
+
     The Rule Engine: Maps Intents + Stage to specific responses.
-    Includes Sanity Checks and Vertical List Formatting.
+
     """
+
     intent = state.get("current_intent")
+
     stage = state.get("stage", "intro")
+
     user_info = state.get("user_info", {})
+
     age = user_info.get("age")
+
     income = user_info.get("income")
+
     
+
     response_text = ""
+
     next_stage = stage 
 
+
+
     # --- CASE 0: Null Input ---
+
     if intent == "null_input":
+
         return {"messages": ["माफ़ करें, मैं आपको समझ नहीं पाया। क्या आप कृपया फिर से दोहरा सकते हैं?"]}
 
+
+
     # --- LAYER 1: Intro ---
+
     if stage == "intro":
+
         if intent == "greeting":
+
             response_text = "नमस्ते, आशा करता हूँ आपका दिन अच्छा जा रहा है |"
+
         elif intent == "query_start":
+
             response_text = "आप पर लागू सरकारी योजनाओं के बारे में अधिक जानने के लिए, कृपया मुझे अपनी उम्र और आय बताएं।"
+
             next_stage = "collecting_info"
+
         elif intent == "provide_info":
+
              pass # Pass to Layer 2 logic
+
         else:
+
             response_text = "क्षमा करें, मैं केवल सरकारी योजनाओं में आपकी सहायता कर सकता हूँ।"
 
-    # --- LAYER 2: Collecting Info & Validation ---
+
+
+    # --- LAYER 2: Collecting Info ---
+
     if intent == "provide_info" or (stage == "collecting_info" and intent not in ["greeting", "irrelevant"]):
+
         if not age or not income:
+
             response_text = "सही योजना खोजने के लिए मुझे आपकी उम्र और आय दोनों की आवश्यकता होगी |"
+
             next_stage = "collecting_info"
+
         else:
-            # --- VALIDATION STEP 1: Age Sanity Check ---
-            # If age is unrealistic (above 100), stop here.
-            try:
-                age_int = int(age)
-                income_int = int(income)
-            except:
-                age_int = 0
-                income_int = 0
 
-            if age_int > 100:
-                response_text = "मनुष्य का औसत जीवनकाल 90 साल होता है, कृपया मुझे अपनी सही उम्र बताएं।"
-                # Keep stage as collecting_info so they can try again
-                return {"messages": [response_text], "stage": "collecting_info"}
-
-            # --- VALIDATION STEP 2: Run Tool & Check Eligibility ---
             # TOOL 1 USAGE: Search Database
+
             schemes = search_schemes_tool()
-            eligible = [s for s in schemes if age_int >= s['min_age'] and income_int <= s['max_income']]
+
+            eligible = [s for s in schemes if int(age) >= s['min_age'] and int(income) <= s['max_income']]
+
             
+
             if eligible:
-<<<<<<< HEAD
-                # Format: Vertical List (One below another) using \n
+
                 names = "\n".join([f"{i+1}. {s['name_hi']}" for i, s in enumerate(eligible)])
-                
-                response_text = f"आपकी जानकारी के आधार पर, आप निम्नलिखित योजनाओं के लिए पात्र हैं:\n\n{names}"
-=======
-                names = "\n".join([f"{i+1}. {s['name_hi']}" for i, s in enumerate(eligible)])
+
                 response_text = f"आपकी जानकारी के आधार पर, आप निम्नलिखित योजनाओं के लिए पात्र हैं:\n{names}"
->>>>>>> cba221f82952862ff5737f4c675fa97289d0630b
+
                 next_stage = "schemes_presented"
-                
-                # Update state with eligible schemes immediately
+
+                # Important: Update state with eligible schemes immediately
+
                 return {"messages": [response_text], "eligible_schemes": eligible, "stage": next_stage}
+
             else:
-                # If income is too high or criteria not met (Empty List)
-                response_text = "आप किसी भी सरकारी योजनाओं के लिए पात्र नहीं हैं।"
-                next_stage = "intro" # Reset conversation since no schemes found
+
+                response_text = "क्षमा करें, आपकी आयु और आय के आधार पर अभी कोई योजना उपलब्ध नहीं है।"
+
+                next_stage = "intro" 
+
+
 
     elif stage == "collecting_info" and intent == "irrelevant":
+
          response_text = "कृपया एक मान्य उत्तर दर्ज करें | पात्रता जानने के लिए मुझे आपकी आयु और आय दोनों की आवश्यकता है।"
 
+
+
     # --- LAYER 3: Schemes Presented ---
+
     elif stage == "schemes_presented":
+
         
+
         if intent == "ask_all_details":
+
             eligible = state.get("eligible_schemes", [])
+
             details = "\n\n".join([f"**{s['name_hi']}**: {s['description']}" for s in eligible])
+
             response_text = f"यहाँ योजनाओं का विवरण दिया गया है:\n{details}\n\nबताएं कि आप किस योजना के लिए आवेदन करना चाहेंगे?"
+
         
+
         elif intent == "select_scheme":
+
             scheme = state.get("selected_scheme")
+
             if scheme:
+
                 response_text = f"{scheme['name_hi']}: {scheme['description']}\n\nक्या आप आवेदन करना चाहते हैं?"
+
                 next_stage = "scheme_detail"
+
             else:
+
                 # If LLM intent was select_scheme but mapping failed
+
                 response_text = "कृपया उस योजना का नाम स्पष्ट रूप से बताएं जो सूची में है।"
 
+
+
         # Specific response for irrelevant input at this stage
+
         elif intent == "irrelevant":
+
              response_text = "कृपया चुनें और बताएं कि आप किस योजना के लिए आवेदन करना चाहेंगे?"
+
         
+
         # Catch-all for other deviations
+
         else:
+
              response_text = "कृपया चुनें और बताएं कि आप किस योजना के लिए आवेदन करना चाहेंगे?"
+
+
 
     # --- LAYER 4: Scheme Detail ---
+
     elif stage == "scheme_detail":
+
         scheme = state.get("selected_scheme")
+
         
+
         if intent == "confirm_apply":
+
             # TOOL 2 USAGE: Get Link
+
             link = get_application_link_tool(scheme)
+
             
+
             response_text = f"बढ़िया! आप इस लिंक पर जाकर आवेदन कर सकते हैं: [यहाँ क्लिक करें]({link})"
+
             next_stage = "intro" 
+
         
+
         elif intent == "deny_apply":
+
             response_text = "धन्यवाद, आपसे मिलकर खुशी हुई, आशा करता हूँ कि भविष्य में मैं आपके काम आ सकूँ।"
+
             next_stage = "intro"
+
         
+
         else:
+
             response_text = "कृपया 'हाँ' या 'नहीं' में उत्तर दें। क्या आप आवेदन करना चाहते हैं?"
 
+
+
     # Fallback
+
     if not response_text:
+
         response_text = "माफ़ करें, मैं समझ नहीं पाया।"
 
-    return {"messages": [response_text], "stage": next_stage}
 
+
+    return {"messages": [response_text], "stage": next_stage}
 
 # --- 5. GRAPH CONSTRUCTION ---
 workflow = StateGraph(AgentState)
