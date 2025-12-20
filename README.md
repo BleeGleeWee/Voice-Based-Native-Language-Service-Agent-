@@ -117,4 +117,5 @@ streamlit run streamlit_app.py
 * `stt.py`: Helper module for handling Audio transcription via Whisper.
 * `requirements.txt`: List of dependencies.
 
-```
+---
+Built this project for CredResolve Job(Role - AI/ML Engg) Assignment!
