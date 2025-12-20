@@ -1,7 +1,6 @@
 import streamlit as st
 from streamlit_mic_recorder import mic_recorder
-from groq import Groq
-from state import app
+from state import app  # Importing the logic from your state.py file
 import base64
 import edge_tts
 import asyncio
@@ -33,6 +32,7 @@ if "thread_id" not in st.session_state:
 st.set_page_config(page_title="सरकारी योजना सहायक", layout="centered")
 
 if not st.session_state.app_started:
+    # --- START SCREEN CSS ---
     bg_filter = "brightness(0.3)" 
     
     button_style = """
@@ -54,6 +54,7 @@ if not st.session_state.app_started:
     }
     """
 else:
+    # --- MAIN APP CSS ---
     bg_filter = "blur(8px) brightness(0.4)" 
     button_style = """
     .stButton>button { 
@@ -114,6 +115,7 @@ st.markdown(f"""
 # --- 3. HELPER FUNCTIONS ---
 
 def format_message(text):
+    # Converts Markdown links to HTML with gold styling
     text = re.sub(
         r'\[(.*?)\]\((.*?)\)', 
         r'<a href="\2" target="_blank" style="color: #FFD700; text-decoration: underline; font-weight: bold;">\1</a>', 
@@ -127,6 +129,7 @@ async def edge_tts_generate(text, filename):
     await communicate.save(filename)
 
 def text_to_speech_b64(text):
+    # Cleans text of markdown/HTML before speaking
     clean_text = re.sub(r'<.*?>', '', text)        
     clean_text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', clean_text)
     clean_text = clean_text.replace("*", "")       
@@ -220,17 +223,21 @@ else:
         st.session_state.is_processing = True
         with st.spinner("पहचाना जा रहा है..."):
             try:
+                # 1. Transcribe Audio
                 user_text = transcribe_audio(audio_input['bytes'], st.secrets["GROQ_API_KEY"])
                 
-                # Treat empty transcription or error as "..." to trigger null handler in state
+                # 2. Handle Silence/Errors
                 if not user_text.strip() or "Error" in user_text: 
                     user_text = "..." 
                 
+                # 3. Append User Message
                 st.session_state.chat_history.append({"role": "user", "text": user_text})
 
+                # 4. Invoke Agent Logic (state.py)
                 config = {"configurable": {"thread_id": st.session_state.thread_id}, "recursion_limit": 10}
                 result = app.invoke({"messages": [user_text]}, config=config)
                 
+                # 5. Append Assistant Response
                 if result and "messages" in result:
                     st.session_state.chat_history.append({"role": "assistant", "text": result["messages"][-1]})
                 else:
