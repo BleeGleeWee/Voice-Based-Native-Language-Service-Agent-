@@ -32,7 +32,8 @@ The **Sarkari Yojana Sahayak** is not a simple chatbot. It is a state-aware agen
 This diagram illustrates the core cognitive loop of the agent. Unlike a standard RAG pipeline, this system evaluates its own outputs before speaking to the user.
 
 <div align="center">
-  <img width="784" alt="Agent Lifecycle" src="https://github.com/user-attachments/assets/797533be-6d6b-4aac-9367-67186fdf90d1" />
+  <img width="784" height="1136" alt="Agent Lifecycle" src="https://github.com/user-attachments/assets/2647733a-bec5-4de5-b17d-6d9be5675076" />
+
 </div>
 
 ### **How it Works:**
@@ -49,7 +50,8 @@ This diagram illustrates the core cognitive loop of the agent. Unlike a standard
 This diagram visualizes the internal code structure within `state.py`. It shows how the **Analyzer Node** (LLM) hands off control to the **Decision Node** (Python Logic) to ensure accurate scheme retrieval.
 
 <div align="center">
-  <img width="784" alt="LangGraph Architecture" src="https://github.com/user-attachments/assets/7e866a18-61da-4e21-ae24-349f885fbac0" />
+  <img width="784" height="861" alt="Lang-Graph" src="https://github.com/user-attachments/assets/49be57db-b059-4d23-b78c-0ef0388fcb90" />
+
 </div>
 
 ### **Key Components:**
@@ -63,7 +65,7 @@ This diagram visualizes the internal code structure within `state.py`. It shows 
 The agent follows a strict **Depth-Layered Conversation Flow**. This ensures users are guided step-by-step from greeting to application without getting lost.
 
 <div align="center">
-  <img width="784" alt="Conversation Logic Flow" src="https://github.com/user-attachments/assets/9cb45258-9b94-4f78-8cfc-48627f1d6f9c" />
+  <img width="784" height="1816" alt="Conversation Flow" src="https://github.com/user-attachments/assets/9dccb18d-11c3-4b26-80ca-eb1969f98485" />
 </div>
 
 ### **Depth Layers:**
