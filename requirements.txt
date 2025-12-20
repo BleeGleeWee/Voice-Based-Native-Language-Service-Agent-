@@ -5,6 +5,6 @@ langgraph
 langchain
 langchain-groq
 langchain-core
-gTTS
+edge-tts
 pydantic
 protobuf>=4.21.1

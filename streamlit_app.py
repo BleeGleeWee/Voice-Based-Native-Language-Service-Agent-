@@ -4,7 +4,8 @@ from groq import Groq
 from state import app
 import io
 import base64
-from gtts import gTTS
+import edge_tts
+import asyncio
 import re
 from stt import transcribe_audio
 
@@ -132,18 +133,43 @@ def format_message(text):
     text = text.replace('\n', '<br>')
     return text
 
-def text_to_speech_b64(text):
-    clean_text = re.sub(r'<.*?>', '', text)
-    clean_text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', clean_text)
-    clean_text = clean_text.replace("*", "")
-    try:
-        tts = gTTS(text=clean_text, lang='hi')
-        fp = io.BytesIO()
-        tts.write_to_fp(fp)
-        return base64.b64encode(fp.getvalue()).decode()
-    except Exception:
-        return ""
+# --- EDGE TTS LOGIC (Male Voice: Madhur) ---
 
+async def edge_tts_generate(text, filename):
+    """Async function to fetch audio from Microsoft Edge TTS"""
+    # "hi-IN-MadhurNeural" is the high-quality Male Hindi Voice
+    communicate = edge_tts.Communicate(text, "hi-IN-MadhurNeural")
+    await communicate.save(filename)
+
+def text_to_speech_b64(text):
+    """Convert text to Hindi Audio (Male Voice) using Edge TTS"""
+    # 1. Clean the text (Remove HTML, Links, Bold, Headings)
+    clean_text = re.sub(r'<.*?>', '', text)       # Remove HTML tags
+    clean_text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', clean_text) # Keep text of links, remove URL
+    clean_text = clean_text.replace("*", "")      # Remove bold syntax
+    clean_text = clean_text.replace("#", "")      # Remove markdown headings
+    clean_text = clean_text.strip()
+    
+    # 2. Define a temporary filename
+    # We use a static name because we overwrite it every time anyway
+    temp_file = "temp_audio.mp3"
+    
+    try:
+        # 3. Run the Async function in a synchronous way for Streamlit
+        # We must create a new event loop to avoid thread conflicts
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(edge_tts_generate(clean_text, temp_file))
+        
+        # 4. Read the file bytes and convert to Base64
+        with open(temp_file, "rb") as f:
+            audio_bytes = f.read()
+            
+        return base64.b64encode(audio_bytes).decode()
+        
+    except Exception as e:
+        # If Edge TTS fails (network issue), return empty string so app doesn't crash
+        return ""
 
 # --- 4. MAIN LOGIC ---
 
