@@ -1,12 +1,11 @@
 import json
 import operator
 import streamlit as st
-from typing import Annotated, TypedDict, List
+from typing import Annotated, TypedDict, List, Optional
 from langchain_groq import ChatGroq
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import SystemMessage
-import re
 
 # --- 1. CONFIG & SETUP ---
 try:
@@ -26,6 +25,7 @@ class AgentState(TypedDict):
     selected_scheme: dict    # currently discussed scheme
     stage: str               # "intro", "collecting_info", "schemes_presented", "scheme_detail"
     current_intent: str      # intent detected by LLM
+    deviation_counter: int   # to track repeated deviations
 
 # --- 3. TOOLS ---
 def search_schemes_tool():
@@ -45,7 +45,6 @@ def get_application_link_tool(scheme_data: dict):
 def analyzer_node(state: AgentState):
     """
     STRICT INTENT CLASSIFIER.
-    Does not generate text. Only categorizes input.
     """
     last_msg = state["messages"][-1]
     last_message = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
@@ -56,43 +55,34 @@ def analyzer_node(state: AgentState):
     scheme_names = [s['name_hi'] for s in eligible_schemes]
 
     # --- IMMEDIATE INTERRUPTS ---
-    # 1. Null/Silence Check (User Rule)
-    if not text_lower or "कर दो" in text_lower or text_lower == "...":
+    # 0. Null/Silence Check (User Rule: "कर दो" or empty)
+    if not text_lower or "कर दो" in text_lower or text_lower == "..." or text_lower == ".":
         return {"current_intent": "null_input"}
 
-    # 2. Greeting Check (Only valid in Intro or neutral states)
+    # 1. Greeting Check (Only valid in Intro)
     if current_stage == "intro":
-        greeting_keywords = ["नमस्ते", "namaste", "hello", "hi", "hey", "pranam"]
-        if any(word in text_lower for word in greeting_keywords):
+        greeting_keywords = ["नमस्ते", "namaste", "hello", "hi", "hey", "pranam", "sup"]
+        if any(word == text_lower for word in greeting_keywords) or any(text_lower.startswith(w) for w in greeting_keywords):
             return {"current_intent": "greeting"}
-
-        start_keywords = ["शुरू", "start", "kya bolna", "kya karna", "kaise", "मदद", "help", "kahan se"]
-        if any(word in text_lower for word in start_keywords) and "age" not in text_lower:
-            return {"current_intent": "query_start"}
-
-    # 3. Explicit Denials (Universal)
-    deny_keywords = ["nahi", "no", "rehne do", "nhi", "na", "cancel"]
-    if text_lower in deny_keywords: 
-        return {"current_intent": "deny"}
 
     # --- LLM CLASSIFICATION ---
     prompt = f"""
-    You are the 'Intent Classifier' for a strict Hindi government scheme bot.
+    You are the Intent Classifier for a strict Hindi government scheme bot.
     
     CURRENT STAGE: {current_stage}
     AVAILABLE SCHEMES: {scheme_names}
 
-    Analyze the Hindi User Input and return JSON with exactly one 'intent'.
+    Analyze the User Input and return JSON with exactly one 'intent'.
 
     INTENT CATEGORIES:
-    1. 'greeting': Only basic greetings (Namaste, Hello).
-    2. 'query_start': User asking "How to start?", "What to do?".
+    1. 'greeting': Basic greetings.
+    2. 'query_start': "How to start?", "What should I say?", "Help me", "Start".
     3. 'provide_info': Input contains numbers that look like Age or Income.
-    4. 'ask_all_details': "Sab batao", "Details do", "What are these?".
-    5. 'select_scheme': User names a scheme or asks about one. MUST FUZZY MATCH with AVAILABLE SCHEMES.
-    6. 'confirm_apply': "Yes", "Ha", "Apply karna hai".
-    7. 'deny': "No", "Nahi".
-    8. 'irrelevant': Jokes, Food, Politics, Gibberish, random questions.
+    4. 'ask_all_benefits': "What do these schemes do?", "Tell me benefits of all".
+    5. 'select_scheme': User names a scheme or asks about one specifically. MUST FUZZY MATCH with AVAILABLE SCHEMES.
+    6. 'confirm_apply': "Yes", "Ha", "Apply karna hai", "Aavedan karna hai".
+    7. 'deny': "No", "Nahi", "Rehne do".
+    8. 'irrelevant': Jokes, Food, Politics, Gibberish, random questions not related to schemes/age/income.
 
     OUTPUT FORMAT:
     {{
@@ -115,8 +105,8 @@ def analyzer_node(state: AgentState):
 
         # Save extracted entities
         new_info = state.get("user_info", {}).copy()
-        if data.get("age"): new_info["age"] = data["age"]
-        if data.get("income"): new_info["income"] = data["income"]
+        if data.get("age") is not None: new_info["age"] = data["age"]
+        if data.get("income") is not None: new_info["income"] = data["income"]
         updates["user_info"] = new_info
 
         # Handle Scheme Selection Logic
@@ -146,7 +136,7 @@ def decision_node(state: AgentState):
     
     response_text = ""
     next_stage = stage 
-
+    
     # --- GLOBAL INTERRUPT: NULL INPUT ---
     if intent == "null_input":
         return {"messages": ["माफ़ करें, मैं आपको समझ नहीं पाया। क्या आप कृपया फिर से दोहरा सकते हैं?"]}
@@ -155,38 +145,39 @@ def decision_node(state: AgentState):
     # LAYER 1: INTRO / BASICS
     # ============================================================
     if stage == "intro":
+        # 1.1 Greeting Reply
         if intent == "greeting":
             response_text = "नमस्ते, आशा करता हूँ आपका दिन अच्छा जा रहा है |"
         
+        # 1.3 Start Query
         elif intent == "query_start":
             response_text = "आप पर लागू सरकारी योजनाओं के बारे में अधिक जानने के लिए, कृपया मुझे अपनी उम्र और आय बताएं।"
             next_stage = "collecting_info"
         
+        # 1.3.a / 1.3.c Direct Info Provision (Jump to collecting logic)
         elif intent == "provide_info":
-            # Jump straight to validation logic below
-            pass 
-        
-        else: # Nonsense / Irrelevant at start
+             # Pass through to validation logic below
+             pass 
+
+        # 1.2 Nonsense
+        else: 
             response_text = "क्षमा करें, मैं केवल सरकारी योजनाओं में आपकी सहायता कर सकता हूँ।"
 
     # ============================================================
-    # LAYER 2: DATA COLLECTION
+    # LAYER 2: DATA COLLECTION (1.3.a - 1.3.c)
     # ============================================================
-    # Logic: User is providing info OR we are waiting for info
     if stage == "collecting_info" or (stage == "intro" and intent == "provide_info"):
         
-        # 1.3.b Deviation / Irrelevant during data collection
-        if intent == "irrelevant" and stage == "collecting_info":
-            response_text = "कृपया एक मान्य उत्तर दर्ज करें | पात्रता जानने के लिए मुझे आपकी आयु और आय दोनों की आवश्यकता है।"
-            next_stage = "collecting_info"
+        # 1.3.b Deviation
+        if intent == "irrelevant" or intent == "greeting":
+             response_text = "कृपया एक मान्य उत्तर दर्ज करें | पात्रता जानने के लिए मुझे आपकी आयु और आय दोनों की आवश्यकता है।"
+             next_stage = "collecting_info"
 
         # 1.3.a Partial Info Check
-        # IMPORTANT: We check this BEFORE checking age > 100
-        elif not age or not income:
-             if intent != "greeting": # Don't scold if they just said Hi
-                response_text = "सही योजना खोजने के लिए मुझे आपकी उम्र और आय दोनों की आवश्यकता होगी |"
-                next_stage = "collecting_info"
-        
+        elif age is None or income is None:
+             response_text = "सही योजना खोजने के लिए मुझे आपकी उम्र और आय दोनों की आवश्यकता होगी |"
+             next_stage = "collecting_info"
+
         # 1.3.c Full Info Validation
         else:
             try:
@@ -195,80 +186,83 @@ def decision_node(state: AgentState):
             except:
                 age_int = 0; income_int = 0
 
-            # Rule: Age > 100 (STRICT CHECK)
+            # 1.3.c.i Age > 100
             if age_int > 100:
                 response_text = "मनुष्य का औसत जीवनकाल 90 साल होता है, कृपया मुझे अपनी सही उम्र बताएं"
-                # CRITICAL: We DO NOT reset stage. We keep asking.
-                # We optionally clear the invalid age so they MUST enter it again
+                # Reset age so they must enter it again, keep stage same
                 state["user_info"]["age"] = None 
                 next_stage = "collecting_info"
             
-            # Rule: Valid Age -> Scan Schemes
+            # 1.3.c.ii Valid Age -> Scan
             else:
                 all_schemes = search_schemes_tool()
-                eligible = [s for s in all_schemes if age_int >= s['min_age'] and income_int <= s['max_income']]
+                # Simple filtering logic
+                eligible = [s for s in all_schemes if age_int >= s.get('min_age', 0) and income_int <= s.get('max_income', 99999999)]
                 
+                # 1.3.c.ii.4 No Schemes Available
                 if not eligible:
                     response_text = "क्षमा करें, आपकी आयु और आय के आधार पर अभी कोई योजना उपलब्ध नहीं है।"
-                    next_stage = "intro" # Reset
+                    next_stage = "intro" # Reset flow
+                
+                # 1.3.c.ii List Schemes
                 else:
-                    # List schemes pointwise
-                    names = "\n".join([f"{i+1}. {s['name_hi']}" for i, s in enumerate(eligible)])
+                    names = "\n".join([f"• {s['name_hi']}" for s in eligible])
                     response_text = f"आपकी जानकारी के आधार पर, आप निम्नलिखित योजनाओं के लिए पात्र हैं:\n\n{names}"
                     next_stage = "schemes_presented"
                     return {"messages": [response_text], "eligible_schemes": eligible, "stage": next_stage}
 
     # ============================================================
-    # LAYER 3: SCHEME SELECTION
+    # LAYER 3 & 4: SCHEME PRESENTATION & DETAIL
     # ============================================================
     elif stage == "schemes_presented":
         
-        # 1.3.c.1 Describe All
-        if intent == "ask_all_details":
+        # 1.3.c.ii.1 Ask Benefits (All)
+        if intent == "ask_all_benefits":
             eligible = state.get("eligible_schemes", [])
-            details = "\n\n".join([f"**{s['name_hi']}**: {s['description']}" for s in eligible])
-            response_text = f"यहाँ योजनाओं का विवरण दिया गया है:\n{details}\n\nबताएं कि आप किस योजना के लिए आवेदन करना चाहेंगे?"
-        
-        # 1.3.c.2 Select Specific
+            descriptions = "\n\n".join([f"**{s['name_hi']}**: {s['description']}" for s in eligible])
+            response_text = descriptions
+            # Stay in this stage
+
+        # 1.3.c.ii.2 Select Specific Scheme
         elif intent == "select_scheme":
             scheme = state.get("selected_scheme")
             if scheme:
-                response_text = f"{scheme['name_hi']}: {scheme['description']}\n\nक्या आप आवेदन करना चाहते हैं?"
+                response_text = f"{scheme['description']}\n\nक्या आप आवेदन करना चाहते हैं?"
                 next_stage = "scheme_detail"
             else:
-                response_text = "कृपया उस योजना का नाम स्पष्ट रूप से बताएं जो सूची में है।"
+                response_text = "कृपया सूची में से किसी एक योजना का नाम बताएं।"
 
-        # 1.3.c.3 Deviation (Random topic after list)
-        elif intent == "irrelevant" or intent == "greeting":
+        # 1.3.c.ii.3 Deviation (Irrelevant)
+        elif intent == "irrelevant":
             response_text = "माफ़ कीजिए, मुझे बिल्कुल भी पता नहीं कि आप क्या कह रहे हैं |"
         
-        # 1.3.c.1.i Deviation Loop (Catch-all)
+        # 1.3.c.ii.1.i Deviation Again / General Confusion
         else:
              response_text = "कृपया चुनें और बताएं कि आप किस योजना के लिए आवेदन करना चाहेंगे?"
 
     # ============================================================
-    # LAYER 4: APPLICATION / DETAIL
+    # LAYER 5: APPLICATION (Yes/No)
     # ============================================================
     elif stage == "scheme_detail":
         
         scheme = state.get("selected_scheme")
 
-        # 1.3.c.2.i Apply (Yes)
+        # 1.3.c.ii.2.i YES
         if intent == "confirm_apply":
             link = get_application_link_tool(scheme)
-            response_text = f"बढ़िया! आप इस लिंक पर जाकर आवेदन कर सकते हैं: [यहाँ क्लिक करें]({link})"
-            next_stage = "intro" # Reset after success
+            response_text = f"ठीक है, यह रहा आवेदन लिंक: [यहाँ क्लिक करें]({link})"
+            next_stage = "intro" # Reset
         
-        # 1.3.c.2.ii Deny (No)
+        # 1.3.c.ii.2.ii NO
         elif intent == "deny":
             response_text = "धन्यवाद, आपसे मिलकर खुशी हुई, आशा करता हूँ कि भविष्य में मैं आपके काम आ सकूँ।"
             next_stage = "intro" # Reset
-        
-        # Deviation in detail stage
-        else:
-            response_text = "कृपया 'हाँ' या 'नहीं' में उत्तर दें। क्या आप आवेदन करना चाहते हैं?"
 
-    # Fallback if nothing matched
+        # Fallback for deviation in this specific Yes/No state
+        else:
+             response_text = "कृपया 'हाँ' या 'नहीं' में उत्तर दें। क्या आप आवेदन करना चाहते हैं?"
+
+    # Fallback safety
     if not response_text:
         response_text = "माफ़ करें, मैं समझ नहीं पाया।"
 
