@@ -23,14 +23,20 @@ class AgentState(TypedDict):
     stage: str               # "intro", "collecting_info", "schemes_presented", "scheme_detail"
     current_intent: str      # intent detected by LLM
 
-# --- 3. TOOLS ---
+# --- 3. TOOLS (Now with 2 Explicit Tools) ---
+
 def search_schemes_tool():
-    """Load schemes from JSON."""
+    """Tool 1: Eligibility Engine - Scans database for matching schemes."""
     try:
         with open("schemes.json", "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return []
+
+def get_application_link_tool(scheme_data: dict):
+    """Tool 2: Retrieval System - Fetches the application URL and details."""
+    # In a real scenario, this might hit an external API or government portal
+    return scheme_data.get('link', '#')
 
 # --- 4. NODES ---
 
@@ -165,6 +171,7 @@ def decision_node(state: AgentState):
             response_text = "सही योजना खोजने के लिए मुझे आपकी उम्र और आय दोनों की आवश्यकता होगी |"
             next_stage = "collecting_info"
         else:
+            # TOOL 1 USAGE: Search Database
             schemes = search_schemes_tool()
             eligible = [s for s in schemes if int(age) >= s['min_age'] and int(income) <= s['max_income']]
             
@@ -181,7 +188,7 @@ def decision_node(state: AgentState):
     elif stage == "collecting_info" and intent == "irrelevant":
          response_text = "कृपया एक मान्य उत्तर दर्ज करें | पात्रता जानने के लिए मुझे आपकी आयु और आय दोनों की आवश्यकता है।"
 
-    # --- LAYER 3: Schemes Presented (The Fix is Here) ---
+    # --- LAYER 3: Schemes Presented ---
     elif stage == "schemes_presented":
         
         if intent == "ask_all_details":
@@ -198,7 +205,7 @@ def decision_node(state: AgentState):
                 # If LLM intent was select_scheme but mapping failed
                 response_text = "कृपया उस योजना का नाम स्पष्ट रूप से बताएं जो सूची में है।"
 
-        # FIX: Specific response for irrelevant input at this stage
+        # Specific response for irrelevant input at this stage
         elif intent == "irrelevant":
              response_text = "कृपया चुनें और बताएं कि आप किस योजना के लिए आवेदन करना चाहेंगे?"
         
@@ -211,7 +218,9 @@ def decision_node(state: AgentState):
         scheme = state.get("selected_scheme")
         
         if intent == "confirm_apply":
-            link = scheme.get('link', '#')
+            # TOOL 2 USAGE: Get Link
+            link = get_application_link_tool(scheme)
+            
             response_text = f"बढ़िया! आप इस लिंक पर जाकर आवेदन कर सकते हैं: [यहाँ क्लिक करें]({link})"
             next_stage = "intro" 
         
