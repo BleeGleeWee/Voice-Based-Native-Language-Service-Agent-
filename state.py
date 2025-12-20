@@ -139,6 +139,7 @@ def analyzer_node(state: AgentState):
 def decision_node(state: AgentState):
     """
     The Rule Engine: Maps Intents + Stage to specific responses.
+    Includes Sanity Checks and Vertical List Formatting.
     """
     intent = state.get("current_intent")
     stage = state.get("stage", "intro")
@@ -165,25 +166,44 @@ def decision_node(state: AgentState):
         else:
             response_text = "क्षमा करें, मैं केवल सरकारी योजनाओं में आपकी सहायता कर सकता हूँ।"
 
-    # --- LAYER 2: Collecting Info ---
+    # --- LAYER 2: Collecting Info & Validation ---
     if intent == "provide_info" or (stage == "collecting_info" and intent not in ["greeting", "irrelevant"]):
         if not age or not income:
             response_text = "सही योजना खोजने के लिए मुझे आपकी उम्र और आय दोनों की आवश्यकता होगी |"
             next_stage = "collecting_info"
         else:
+            # --- VALIDATION STEP 1: Age Sanity Check ---
+            # If age is unrealistic (above 100), stop here.
+            try:
+                age_int = int(age)
+                income_int = int(income)
+            except:
+                age_int = 0
+                income_int = 0
+
+            if age_int > 100:
+                response_text = "मनुष्य का औसत जीवनकाल 90 साल होता है, कृपया मुझे अपनी सही उम्र बताएं।"
+                # Keep stage as collecting_info so they can try again
+                return {"messages": [response_text], "stage": "collecting_info"}
+
+            # --- VALIDATION STEP 2: Run Tool & Check Eligibility ---
             # TOOL 1 USAGE: Search Database
             schemes = search_schemes_tool()
-            eligible = [s for s in schemes if int(age) >= s['min_age'] and int(income) <= s['max_income']]
+            eligible = [s for s in schemes if age_int >= s['min_age'] and income_int <= s['max_income']]
             
             if eligible:
-                names = ", ".join([f"{i+1}. {s['name_hi']}" for i, s in enumerate(eligible)])
-                response_text = f"आपकी जानकारी के आधार पर, आप निम्नलिखित योजनाओं के लिए पात्र हैं:\n{names}"
+                # Format: Vertical List (One below another) using \n
+                names = "\n".join([f"{i+1}. {s['name_hi']}" for i, s in enumerate(eligible)])
+                
+                response_text = f"आपकी जानकारी के आधार पर, आप निम्नलिखित योजनाओं के लिए पात्र हैं:\n\n{names}"
                 next_stage = "schemes_presented"
-                # Important: Update state with eligible schemes immediately
+                
+                # Update state with eligible schemes immediately
                 return {"messages": [response_text], "eligible_schemes": eligible, "stage": next_stage}
             else:
-                response_text = "क्षमा करें, आपकी आयु और आय के आधार पर अभी कोई योजना उपलब्ध नहीं है।"
-                next_stage = "intro" 
+                # If income is too high or criteria not met (Empty List)
+                response_text = "आप किसी भी सरकारी योजनाओं के लिए पात्र नहीं हैं।"
+                next_stage = "intro" # Reset conversation since no schemes found
 
     elif stage == "collecting_info" and intent == "irrelevant":
          response_text = "कृपया एक मान्य उत्तर दर्ज करें | पात्रता जानने के लिए मुझे आपकी आयु और आय दोनों की आवश्यकता है।"
@@ -236,6 +256,7 @@ def decision_node(state: AgentState):
         response_text = "माफ़ करें, मैं समझ नहीं पाया।"
 
     return {"messages": [response_text], "stage": next_stage}
+
 
 # --- 5. GRAPH CONSTRUCTION ---
 workflow = StateGraph(AgentState)
