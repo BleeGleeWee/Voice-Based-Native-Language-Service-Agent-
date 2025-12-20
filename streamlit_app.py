@@ -1,6 +1,6 @@
 import streamlit as st
 from streamlit_mic_recorder import mic_recorder
-from state import app  # Importing the logic from your state.py file
+from state import app  # Importing the logic from state.py file
 import base64
 import edge_tts
 import asyncio
