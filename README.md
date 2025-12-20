@@ -1,9 +1,9 @@
-# Sarkari Yojana Sahayak 🏛️ (Voice-Based Native Language Agent)
+# Sarkari Yojana Sahayak 🏛️ (Hindi Agent)
 
 🔴 Live Demo: [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://native-lang-agent-ml.streamlit.app/)
 
 **Sarkari Yojana Sahayak** is a voice-first, agentic AI system designed to assist rural users in discovering and applying for government welfare schemes in their native language (Hindi). Unlike simple chatbots, this system uses a **Finite State Machine (FSM)** via LangGraph to guide the user through a structured conversation flow—from eligibility checks to final application—while handling errors, interruptions, and memory context.
-**Sarkari Yojana Sahayak** is a voice-first, agentic AI system designed to assist rural users in discovering and applying for government welfare schemes in their native language (Hindi). Unlike simple chatbots, this system uses a **Finite State Machine (FSM)** via LangGraph to guide the user through a structured conversation flow—from eligibility checks to final application—while handling errors, interruptions, and memory context.
+
 
 ## 🚀 Key Features
 * **🎙️ Voice-First Interface:** Complete hands-free experience. The user speaks in Hindi, and the agent replies with a natural, human-like male voice (using Microsoft Edge Neural TTS).
@@ -22,7 +22,7 @@
 
 ---
 
-# 🏗️ System Architecture & Logic Flow
+# System Architecture & Logic Flow
 
 The **Sarkari Yojana Sahayak** is not a simple chatbot. It is a state-aware agent designed on the **Planner-Evaluator-Executor** architecture. It uses a **Finite State Machine (FSM)** implemented via **LangGraph** to ensure deterministic reliability while maintaining the flexibility of an LLM.
 
@@ -76,6 +76,29 @@ The agent follows a strict **Depth-Layered Conversation Flow**. This ensures use
 * **Error Handling:** If the user stays silent or speaks nonsense, the agent attempts to realign the conversation twice before politely ending it.
 ---
 
+
+# 💬 Sample Conversation Log
+```
+User: "नमस्ते" (Namaste) Agent: "नमस्ते, आशा करता हूँ आपका दिन अच्छा जा रहा है |" (Status: ✅ Greeting Intent Detected)
+
+User: "मुझे आईस्क्रिम खाना है" (I want to eat ice cream) Agent: "क्षमा करें, मैं केवल सरकारी योजनाओं में आपकी सहायता कर सकता हूँ।" (Status: 🛡️ Irrelevant Input Rejected)
+
+User: "मेरी उम्र 120 साल है..." (My age is 120...) Agent: "मनुष्य का औसत जीवनकाल 90 साल होता है, कृपया मुझे अपनी सही उम्र बताएं" (Status: 🛡️ Logic Guardrail - Biological Impossibility Rejected)
+
+User: "अच्छा, मेरी उम्र 15 साल है" (Okay, my age is 15) Agent: "सही योजना खोजने के लिए मुझे आपकी उम्र और आय दोनों की आवश्यकता होगी |" (Status: 🧠 Memory - Retained Age, Planner requested missing Income)
+
+User: "मेरी आय 5000 है" (My income is 5000) Agent: "आपकी जानकारी के आधार पर, आप निम्नलिखित योजनाओं के लिए पात्र हैं:
+
+अल्पसंख्यक प्री-मैट्रिक छात्रवृत्ति
+
+पीएम यशस्वी छात्रवृत्ति योजना..." (Status: 🛠️ Tool Call - Database Search Executed)
+
+User: "पियन यशाश्री चात्रपृत्त योजना" (Mispronounced Scheme Name) Agent: "पीएम यशस्वी छात्रवृत्ति योजना: OBC, EBC और DNT श्रेणी के मेधावी छात्रों के लिए उच्च स्तरीय शिक्षा छात्रवृत्ति। क्या आप आवेदन करना चाहते हैं?" (Status: 🤖 AI Reasoning - Fuzzy Matching Corrected 'Pian Yashashri' to 'PM Yashasvi')
+
+User: "जी हाँ" (Yes) Agent: "बढ़िया! आप इस लिंक पर जाकर आवेदन कर सकते हैं: [यहाँ क्लिक करें]" (Status: 🛠️ Tool Call - Application Link Retrieved)
+
+```
+
 ## ⚙️ Setup & Installation
 
 ### 1. Clone the Repository
@@ -93,7 +116,21 @@ pip install -r requirements.txt
 
 ```
 
-### 3. Configure Secrets
+### 3. Windows Virtual Environment setup (py version 3.10.11)
+
+```bash
+python -m venv agent_env
+
+```
+
+### 4. Activate the virtual environment
+
+```bash
+agent_env\Scripts\activate
+
+```
+
+### 5. Configure Secrets
 
 Create a file named `.streamlit/secrets.toml` in the root directory.
 
@@ -104,20 +141,24 @@ GROQ_API_KEY = "your_groq_api_key_here"
 
 ```
 
-### 4. Run the Application
+### 6. Run the Application
 
 ```bash
 streamlit run streamlit_app.py
 
 ```
 
-## 📂 Project Structure
-
-* `streamlit_app.py`: Main entry point. Handles UI, Voice Recording, and Edge-TTS playback.
-* `state.py`: The brain of the agent. Contains LangGraph nodes, State definition, and LLM prompts.
-* `schemes.json`: Database containing scheme rules, descriptions, and application links.
-* `stt.py`: Helper module for handling Audio transcription via Whisper.
-* `requirements.txt`: List of dependencies.
-
+## Repo - Structure
+```
+Sarkari-Yojana-Sahayak/
+├── .streamlit/
+│   └── secrets.toml       # API keys configuration (NOT pushed to GitHub)
+├── schemes.json           # Knowledge Base (Eligibility Rules & Data)
+├── state.py               # Core Agent Logic (LangGraph State Machine)
+├── streamlit_app.py       # Frontend Interface (UI, Audio I/O)
+├── stt.py                 # Speech-to-Text Utility
+├── requirements.txt       # Project Dependencies
+└── README.md              # Documentation
+```
 ---
 Built this project for CredResolve Job(Role - AI/ML Engg) Assignment!
