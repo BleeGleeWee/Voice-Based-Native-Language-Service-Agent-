@@ -1,4 +1,4 @@
-# Sarkari Yojana Sahayak 🏛️ (Hindi Agent)
+# सरकारी योजना सहायक 🏛️ (Hindi Agent)
 
 🔴 Live Demo: [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://native-lang-agent-ml.streamlit.app/)
 
@@ -157,7 +157,7 @@ GROQ_API_KEY = "your_groq_api_key_here"
 streamlit run streamlit_app.py
 
 ```
-
+---
 ## Repo - Structure
 ```
 Sarkari-Yojana-Sahayak/
