@@ -176,7 +176,7 @@ def decision_node(state: AgentState):
             eligible = [s for s in schemes if int(age) >= s['min_age'] and int(income) <= s['max_income']]
             
             if eligible:
-                names = ", ".join([f"{i+1}. {s['name_hi']}" for i, s in enumerate(eligible)])
+                names = "\n".join([f"{i+1}. {s['name_hi']}" for i, s in enumerate(eligible)])
                 response_text = f"आपकी जानकारी के आधार पर, आप निम्नलिखित योजनाओं के लिए पात्र हैं:\n{names}"
                 next_stage = "schemes_presented"
                 # Important: Update state with eligible schemes immediately
