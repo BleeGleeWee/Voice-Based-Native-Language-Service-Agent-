@@ -6,6 +6,7 @@ import io
 import base64
 from gtts import gTTS
 import re
+from stt import transcribe_audio
 
 # --- 1. SETUP & SESSION STATE ---
 if "is_processing" not in st.session_state:
@@ -143,18 +144,6 @@ def text_to_speech_b64(text):
     except Exception:
         return ""
 
-def transcribe_audio_input(audio_bytes, api_key):
-    try:
-        file_tuple = ("audio.wav", audio_bytes)
-        transcription = client.audio.transcriptions.create(
-            file=file_tuple,
-            model="whisper-large-v3",
-            language="hi",
-            temperature=0.0
-        )
-        return transcription.text
-    except Exception as e:
-        return f"Error: {str(e)}"
 
 # --- 4. MAIN LOGIC ---
 
@@ -234,7 +223,10 @@ else:
         st.session_state.is_processing = True
         with st.spinner("पहचाना जा रहा है..."):
             try:
-                user_text = transcribe_audio_input(audio_input['bytes'], st.secrets["GROQ_API_KEY"])
+                user_text = transcribe_audio(
+    audio_input['bytes'], 
+    st.secrets["GROQ_API_KEY"]
+)
                 if not user_text.strip() or "Error" in user_text: user_text = "..." 
                 st.session_state.chat_history.append({"role": "user", "text": user_text})
 

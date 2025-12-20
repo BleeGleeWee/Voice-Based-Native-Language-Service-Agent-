@@ -7,8 +7,11 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import SystemMessage
 
 # --- 1. CONFIG & SETUP ---
-GROQ_API_KEY = "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" 
-llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=GROQ_API_KEY, temperature=0)
+llm = ChatGroq(
+    model="llama-3.3-70b-versatile", 
+    groq_api_key=st.secrets["GROQ_API_KEY"], 
+    temperature=0
+)
 
 # --- 2. STATE DEFINITION ---
 class AgentState(TypedDict):

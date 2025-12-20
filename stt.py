@@ -6,7 +6,7 @@ def transcribe_audio(audio_input, api_key):
     """
     Transcribes audio from either a file path OR raw bytes (from Streamlit).
     """
-    client = Groq(api_key="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")
+    client = Groq(api_key=api_key) 
     
     # 1. If input is a file path (string), read it
     if isinstance(audio_input, str):
