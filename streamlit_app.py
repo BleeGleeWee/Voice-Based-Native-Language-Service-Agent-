@@ -7,6 +7,7 @@ import base64
 import edge_tts
 import asyncio
 import re
+import uuid  
 from stt import transcribe_audio
 
 # --- 1. SETUP & SESSION STATE ---
@@ -25,8 +26,10 @@ greeting_text = "नमस्ते! मैं आपका सरकारी �
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [{"role": "assistant", "text": greeting_text}]
 
+
 if "thread_id" not in st.session_state:
-    st.session_state.thread_id = "hi_session_" + str(hash("agentic_hindi_final_v5"))
+    # This creates a completely new ID every time the page is refreshed
+    st.session_state.thread_id = f"session_{str(uuid.uuid4())}"
 
 # --- 2. DYNAMIC UI CONFIGURATION ---
 st.set_page_config(page_title="सरकारी योजना सहायक", layout="centered")
